@@ -1,8 +1,8 @@
 @tool
-class_name UndoRedoBuffer
+class_name UgUndoRedoBuffer
 
 
-static var listening_buffer: UndoRedoBuffer
+static var listening_buffer: UgUndoRedoBuffer
 
 
 # HACK @sphynx-skillcap: ambiguate the type of undo_redo because we want to be able to pass either
@@ -10,7 +10,7 @@ static var listening_buffer: UndoRedoBuffer
 static func create_and_run_buffered_action(undo_redo: Object, action_name: String, callable: Callable, ...args: Array) -> void:
 	undo_redo.create_action(action_name, 0)
 	
-	var new_undo_redo_buffer: UndoRedoBuffer = UndoRedoBuffer.new()
+	var new_undo_redo_buffer: UgUndoRedoBuffer = UgUndoRedoBuffer.new()
 	
 	undo_redo.add_do_method.bindv([new_undo_redo_buffer, "_do", callable] + args).call()
 	
