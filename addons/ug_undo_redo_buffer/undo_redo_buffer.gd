@@ -2,13 +2,6 @@
 class_name UndoRedoBuffer
 
 
-var has_captured: bool = false
-
-var do_buffer: Array[Callable]
-
-var undo_buffer: Array[Callable]
-
-
 static var listening_buffer: UndoRedoBuffer
 
 
@@ -19,9 +12,9 @@ static func create_and_run_buffered_action(undo_redo: Object, action_name: Strin
 	
 	var new_undo_redo_buffer: UndoRedoBuffer = UndoRedoBuffer.new()
 	
-	undo_redo.add_do_method.callv([new_undo_redo_buffer, "do", callable] + args)
+	undo_redo.add_do_method.bindv([new_undo_redo_buffer, "_do", callable] + args).call()
 	
-	undo_redo.add_undo_method(new_undo_redo_buffer, "undo")
+	undo_redo.add_undo_method(new_undo_redo_buffer, "_undo")
 	
 	undo_redo.commit_action()
 
@@ -30,28 +23,51 @@ static func add_do_method(callable: Callable, ...args: Array) -> void:
 	if !listening_buffer:
 		return
 	
-	listening_buffer.do_buffer.append(callable)
+	listening_buffer.append_do(callable.bindv(args))
 
 
 static func add_undo_method(callable: Callable, ...args: Array) -> void:
 	if !listening_buffer:
 		return
 	
-	listening_buffer.undo_buffer.append(callable)
+	listening_buffer.append_undo(callable.bindv(args))
+
+
+static func add_do_undo_property(object: Object, property: StringName, new_value: Variant, old_value: Variant) -> void:
+	if !listening_buffer:
+		return
+	
+	listening_buffer.append_do(object.set.bind(property, new_value))
+	listening_buffer.append_undo(object.set.bind(property, old_value))
 
 
 static func add_do_property(object: Object, property: StringName, value: Variant) -> void:
 	if !listening_buffer:
 		return
 	
-	listening_buffer.do_buffer.append(object.set.bind(property, value))
+	listening_buffer.append_do(object.set.bind(property, value))
 
 
 static func add_undo_property(object: Object, property: StringName, value: Variant) -> void:
 	if !listening_buffer:
 		return
 	
-	listening_buffer.undo_buffer.append(object.set.bind(property, value))
+	listening_buffer.append_undo(object.set.bind(property, value))
+
+
+var has_captured: bool = false
+
+var do_buffer: Array[Dictionary]
+
+var undo_buffer: Array[Dictionary]
+
+
+func append_do(callable: Callable) -> void:
+	do_buffer.append(UgCallableUtils.serialize_callable(callable))
+
+
+func append_undo(callable: Callable) -> void:
+	undo_buffer.append(UgCallableUtils.serialize_callable(callable))
 
 
 func _do(callable: Callable, ...args: Array) -> void:
@@ -93,11 +109,15 @@ func _stop_listening() -> void:
 
 
 func _do_captured() -> void:
-	for callable in do_buffer:
+	for serialized_callable: Dictionary[StringName, Variant] in do_buffer:
+		var callable: Callable = UgCallableUtils.recreate_callable(serialized_callable)
+		
 		callable.call()
 
 
 # We call undo methods in reverse order.
 func _undo_captured() -> void:
 	for i in range(undo_buffer.size() - 1, -1, -1):
-		undo_buffer[i].call()
+		var callable: Callable = UgCallableUtils.recreate_callable(undo_buffer[i])
+		
+		callable.call()
